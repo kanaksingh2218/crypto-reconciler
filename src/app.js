@@ -4,73 +4,88 @@ import path from 'path';
 import crypto from 'crypto';
 import { config } from './config/index.js';
 import { ingestFile } from './ingestion/parser.js';
-import { runReconciliation } from './matching/engine.js';
+import { runReconciliation, saveReport, jsonToCsv } from './matching/engine.js';
 import Transaction from './models/Transaction.js';
+import ReportEntry from './models/Report.js';
 
 const app = express();
 
 async function startApp() {
   try {
     await mongoose.connect(config.mongoUri);
-    console.log('Connected to MongoDB');
+    console.log('📦 Connected to MongoDB');
 
     const runId = crypto.randomUUID();
-    console.log(`Starting ingestion run: ${runId}`);
-
     const dataDir = path.resolve('data');
+
+    console.log(`Starting Run: ${runId}`);
     await ingestFile(path.join(dataDir, 'user_transactions.csv'), 'user', runId);
     await ingestFile(path.join(dataDir, 'exchange_transactions.csv'), 'exchange', runId);
     console.log('Ingestion complete.');
 
-    console.log('Running Matching Engine...');
     const reportData = await runReconciliation(runId);
     console.log('Matching complete.');
 
-    console.log(`
-    RECONCILIATION SUMMARY
-    Perfect Matches:      ${reportData.matched.length}
-    Conflicting Matches:  ${reportData.conflicting.length}
-    Unmatched (User):     ${reportData.unmatchedUser.length}
-    Unmatched (Exchange): ${reportData.unmatchedExchange.length}
-    `);
+    await saveReport(runId, reportData);
+    console.log('Report saved to database.');
+
+
+    app.get('/', async (req, res) => {
+      try {
+        const allTransactions = await Transaction.find({ runId }).select('-__v'); 
+        res.json({
+          message: "Ingested transactions for this run",
+          totalRows: allTransactions.length,
+          data: allTransactions
+        });
+      } catch (err) {
+        res.status(500).json({ error: "Failed to fetch data" });
+      }
+    });
+
+    app.get('/report', async (req, res) => {
+      try {
+        const resultsFromDb = await ReportEntry.find({ runId });
+        res.json({
+          success: true,
+          runId: runId,
+          summary: {
+            perfectMatches: reportData.matched.length,
+            conflicts: reportData.conflicting.length,
+            unmatchedUser: reportData.unmatchedUser.length,
+            unmatchedExchange: reportData.unmatchedExchange.length
+          },
+          results: resultsFromDb
+        });
+      } catch (err) {
+        res.status(500).json({ error: "Failed to fetch report" });
+      }
+    });
+
+    app.get('/report/csv', async (req, res) => {
+      try {
+        const resultsFromDb = await ReportEntry.find({ runId });
+        const csvContent = jsonToCsv(resultsFromDb);
+        
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', `attachment; filename=reconciliation_report_${runId}.csv`);
+        res.status(200).send(csvContent);
+      } catch (err) {
+        res.status(500).send("Error generating CSV");
+      }
+    });
 
     app.listen(config.port, () => {
-      console.log(`\n Web Server is alive!`);
-      console.log(`Open your browser to: http://localhost:${config.port}`);
+      console.log(`\nWeb Server is alive!`);
+      console.log(`View Data: http://localhost:${config.port}`);
+      console.log(`View Report: http://localhost:${config.port}/report`);
+      console.log(`Download CSV Report: http://localhost:${config.port}/report/csv`);
     });
 
   } catch (error) {
-    console.error('Critical Error:', error);
+    console.error('Critical System Error:', error);
     process.exit(1);
   }
 }
-
-   app.get('/report', (req, res) => {
-      res.json({
-        success: true,
-        runId: runId,
-        summary: {
-          perfectMatches: reportData.matched.length,
-          conflicts: reportData.conflicting.length,
-          unmatchedUser: reportData.unmatchedUser.length,
-          unmatchedExchange: reportData.unmatchedExchange.length
-        },
-        results: reportData
-      });
-    });
-
-    app.get('/', async (req, res) => {
-  try {
-    const allTransactions = await Transaction.find().select('-__v'); 
-   
-    res.json({
-      message: "Here is your ingested data!",
-      totalRows: allTransactions.length,
-      data: allTransactions
-    });
-  } catch (err) {
-    res.status(500).json({ error: "Failed to fetch data" });
-  }
-});
 
 startApp();
