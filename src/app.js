@@ -4,6 +4,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { config } from './config/index.js';
 import { ingestFile } from './ingestion/parser.js';
+import { runReconciliation } from './matching/engine.js';
 import Transaction from './models/Transaction.js';
 
 const app = express();
@@ -21,6 +22,18 @@ async function startApp() {
     await ingestFile(path.join(dataDir, 'exchange_transactions.csv'), 'exchange', runId);
     console.log('Ingestion complete.');
 
+    console.log('Running Matching Engine...');
+    const reportData = await runReconciliation(runId);
+    console.log('Matching complete.');
+
+    console.log(`
+    RECONCILIATION SUMMARY
+    Perfect Matches:      ${reportData.matched.length}
+    Conflicting Matches:  ${reportData.conflicting.length}
+    Unmatched (User):     ${reportData.unmatchedUser.length}
+    Unmatched (Exchange): ${reportData.unmatchedExchange.length}
+    `);
+
     app.listen(config.port, () => {
       console.log(`\n Web Server is alive!`);
       console.log(`Open your browser to: http://localhost:${config.port}`);
@@ -32,7 +45,21 @@ async function startApp() {
   }
 }
 
-app.get('/', async (req, res) => {
+   app.get('/report', (req, res) => {
+      res.json({
+        success: true,
+        runId: runId,
+        summary: {
+          perfectMatches: reportData.matched.length,
+          conflicts: reportData.conflicting.length,
+          unmatchedUser: reportData.unmatchedUser.length,
+          unmatchedExchange: reportData.unmatchedExchange.length
+        },
+        results: reportData
+      });
+    });
+
+    app.get('/', async (req, res) => {
   try {
     const allTransactions = await Transaction.find().select('-__v'); 
    
