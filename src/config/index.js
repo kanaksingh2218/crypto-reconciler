@@ -1,17 +1,8 @@
 import 'dotenv/config';
 
 export const config = {
-  mongoUri: process.env.MONGO_URI || 'mongodb://localhost:27017/crypto-reconciler',
+  mongoUri: process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/crypto-reconciler',
   port: process.env.PORT || 3000,
-  timestampToleranceSeconds: 300, 
-  quantityTolerancePct: 0.0001,  
-  assetAliases: {
-    bitcoin: 'BTC',
-    eth:     'ETH',
-    btc:     'BTC',
-    sol:     'SOL',
-    usdt:    'USDT',
-    matic:   'MATIC',
-    link:    'LINK',
-  }
+  timestampToleranceSeconds: parseInt(process.env.TIMESTAMP_TOLERANCE_SECONDS) || 300,
+  quantityTolerancePct: parseFloat(process.env.QUANTITY_TOLERANCE_PCT) || 0.01,
 };

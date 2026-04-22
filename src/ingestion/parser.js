@@ -1,48 +1,40 @@
 import fs from 'fs';
-import { parse } from 'csv-parse';
-import { validateRow } from './validator.js';
+import csv from 'csv-parser';
 import Transaction from '../models/Transaction.js';
+import { validateRow } from './validator.js';
 
 export async function ingestFile(filePath, source, runId) {
-  const batchSize = 1000;
-  let batch = [];
+  const transactions = [];
   const seenIds = new Set();
-  
-  let flaggedCount = 0;
-  let totalCount = 0;
 
-  const parser = fs.createReadStream(filePath).pipe(
-    parse({
-      columns: true,           
-      skip_empty_lines: true,
-      trim: true,
-      relax_column_count: true,
-      bom: true
-    })
-  );
+  return new Promise((resolve, reject) => {
+    fs.createReadStream(filePath)
+      .pipe(csv())
+      .on('data', (row) => {
+        const validation = validateRow(row, seenIds);
 
-  try {
-    for await (const record of parser) {
-      const validated = validateRow(record, seenIds);
-      batch.push({ ...validated, source, runId, rawRow: record });
-      
-      if (!validated.isValid) flaggedCount++;
-      totalCount++;
-
-      if (batch.length >= batchSize) {
-        await Transaction.insertMany(batch);
-        batch = []; 
-      }
-    }
-
-    if (batch.length > 0) {
-      await Transaction.insertMany(batch);
-    }
-
-    console.log(`[${source}] Ingestion complete: ${totalCount} total rows parsed, ${flaggedCount} flagged with issues.`);
-    
-  } catch (err) {
-    console.error(`[${source}] Error parsing file:`, err);
-    throw err; 
-  }
+        transactions.push({
+          runId,
+          source,
+          rawRow: row,
+          transactionId: row.transaction_id,
+          timestamp: validation.parsedTimestamp,
+          type: row.type ? row.type.toUpperCase() : null,
+          asset: row.asset ? row.asset.toUpperCase() : null,
+          quantity: validation.parsedQuantity,
+          priceUsd: validation.parsedPrice,
+          fee: validation.parsedFee,
+          note: row.note || '',
+          isValid: validation.isValid,
+          issues: validation.issues
+        });
+      })
+      .on('end', async () => {
+        if (transactions.length > 0) {
+          await Transaction.insertMany(transactions);
+        }
+        resolve();
+      })
+      .on('error', reject);
+  });
 }
