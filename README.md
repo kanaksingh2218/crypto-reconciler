@@ -4,7 +4,7 @@ A production-grade Node.js backend application designed to reconcile cryptocurre
 
 This project completely fulfills all four tasks of the assignment: **Data Ingestion & Validation**, **Reconciliation Engine**, **Reporting**, and **REST API Exposure**.
 
-## 🚀 Features
+##  Features
 
 * **Task 1: Robust Data Ingestion**
     * Uses efficient stream-based parsing (`csv-parser`) to handle potentially large CSV files without memory bloat.
@@ -19,13 +19,13 @@ This project completely fulfills all four tasks of the assignment: **Data Ingest
 * **Task 4: RESTful API**
     * Built with Express.js to expose clean, decoupled endpoints for triggering runs and fetching summarized or detailed data.
 
-## 🛠 Prerequisites
+##  Prerequisites
 
 Before running this application, ensure you have the following installed:
 - **Node.js** (v18 or higher recommended)
 - **MongoDB** (Running locally on the default port `27017`)
 
-## 📂 Project Structure
+##  Project Structure
 
 \`\`\`text
 crypto-reconciler/
@@ -50,7 +50,7 @@ crypto-reconciler/
 └── .env
 \`\`\`
 
-## ⚙️ Setup & Installation
+##  Setup & Installation
 
 **1. Install dependencies**
 \`\`\`bash
@@ -79,7 +79,7 @@ The server will start and connect to your local database. It will output: `http:
 
 ---
 
-## 📡 API Endpoints
+##  API Endpoints
 
 You can use **Postman**, **cURL**, or your **Web Browser** to interact with the API.
 
